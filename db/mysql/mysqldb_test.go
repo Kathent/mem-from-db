@@ -50,7 +50,7 @@ func TestNewDbImpl(t *testing.T) {
 
 func init() {
 	d, err := NewDbImpl(DbConfig{
-		Addr:        "192.168.96.204:3306",
+		Addr:        "localhost:32770",
 		DB:          "robot",
 		Username:    "root",
 		Password:    "123456",
