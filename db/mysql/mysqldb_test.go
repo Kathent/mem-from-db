@@ -12,6 +12,9 @@ var (
 )
 
 type cmd struct {
+	sql string
+	arg []interface{}
+	typ int
 	mysql.DbCmd
 }
 
@@ -30,12 +33,16 @@ type taskInfo struct {
 	CallNumber      sql.NullString
 }
 
-func (*cmd) Sql() string {
-	return "select * from task_info"
+func (c *cmd) Sql() string {
+	return c.sql
 }
 
-func (*cmd) Args() []interface{} {
-	return nil
+func (c *cmd) Args() []interface{} {
+	return c.arg
+}
+
+func (c *cmd) ExecType() int {
+	return c.typ
 }
 
 func TestNewDbImpl(t *testing.T) {
@@ -47,6 +54,24 @@ func TestNewDbImpl(t *testing.T) {
 	}
 
 	fmt.Println(taskInfo)
+}
+
+func TestDbImpl_Exec(t *testing.T) {
+	ti := taskInfo{
+		TaskName:       "haha",
+		TaskNum:        1,
+		WordStrategyId: 1,
+	}
+
+	exec, err := db.Exec(&cmd{sql: "insert into task_info (task_name, task_num, word_strategy_id) values (?, ?, ?)",
+		arg: []interface{}{ti.TaskName, ti.TaskNum, ti.WordStrategyId},
+		typ: mysql.ExecTypeInsert})
+	if err != nil {
+		fmt.Println(err)
+		t.FailNow()
+	}
+
+	fmt.Println(exec)
 }
 
 func init() {

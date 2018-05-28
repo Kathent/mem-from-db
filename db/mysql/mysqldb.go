@@ -58,7 +58,7 @@ func NewDbImpl(conf DbConfig) (*DbImpl, error) {
 
 func (d *DbImpl) Exec(cmd base.DbCmd) (interface{}, error) {
 	if val, ok := cmd.(mysql.ExecCmd); ok {
-		result, err := d.db.Exec(val.Sql(), val.Args())
+		result, err := d.db.Exec(val.Sql(), val.Args()...)
 		if err != nil {
 			return nil, err
 		}
