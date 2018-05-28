@@ -2,13 +2,13 @@ package mysql
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/Kathent/mem-from-db/sql/cmd/base"
 	"github.com/Kathent/mem-from-db/sql/cmd/mysql"
 	_ "github.com/go-sql-driver/mysql"
 	"reflect"
 	"strings"
-	"errors"
 )
 
 const (
@@ -19,10 +19,10 @@ const (
 var (
 	queryResTypeErr = errors.New("res type can not be map")
 
-	intNullType = reflect.TypeOf(sql.NullInt64{})
-	floatNullType = reflect.TypeOf(sql.NullFloat64{})
+	intNullType    = reflect.TypeOf(sql.NullInt64{})
+	floatNullType  = reflect.TypeOf(sql.NullFloat64{})
 	stringNullType = reflect.TypeOf(sql.NullString{})
-	boolNullType = reflect.TypeOf(sql.NullBool{})
+	boolNullType   = reflect.TypeOf(sql.NullBool{})
 )
 
 type DbConfig struct {
@@ -134,43 +134,30 @@ func resolveEle(rows *sql.Rows, val reflect.Value) error {
 	// 去除指针
 	elem := val.Elem()
 	dt := make([]interface{}, 0)
-	fieldMap := make(map[reflect.Value]reflect.Value)
 	for _, col := range cols {
 		afterName := transferName(col)
-		field := elem.FieldByName(afterName)
-		fmt.Println(col, afterName, field)
-		newVal := reflect.New(nullTypeMap(field.Type()))
-		value := newVal.Interface()
-		fieldMap[field] = newVal
-		dt = append(dt, value)
+		field := elem.FieldByName(afterName).Addr().Interface()
+		dt = append(dt, field)
 	}
 
-	//for k, v := range fieldMap {
-	//	k.Set(v.Elem())
-	//}
-
-	fmt.Println(dt)
 	scan := rows.Scan(dt...)
-
-	fmt.Println(dt)
 	return scan
 }
 
 func nullTypeMap(field reflect.Type) reflect.Type {
 	switch field.Kind() {
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, 
-			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			return intNullType
-		case reflect.Float32, reflect.Float64:
-			return floatNullType
-		case reflect.Bool:
-			return boolNullType
-		case reflect.String:
-			return stringNullType
-		default:
-			return field
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return intNullType
+	case reflect.Float32, reflect.Float64:
+		return floatNullType
+	case reflect.Bool:
+		return boolNullType
+	case reflect.String:
+		return stringNullType
+	default:
+		return field
 
-		
 	}
 	return field
 }

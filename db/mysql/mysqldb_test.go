@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/Kathent/mem-from-db/sql/cmd/mysql"
 	"testing"
@@ -19,14 +20,14 @@ type taskInfo struct {
 	TaskName        string
 	TaskNum         int
 	WordStrategyId  int64
-	CommitTime      int64
-	StartTime       int64
-	EndTime         int64
+	CommitTime      sql.NullInt64
+	StartTime       sql.NullInt64
+	EndTime         sql.NullInt64
 	Status          int
-	ClientStaticsId string
-	WorkTimeId      int64
-	VccId           string
-	CallNumber      string
+	ClientStaticsId sql.NullString
+	WorkTimeId      sql.NullInt64
+	VccId           sql.NullString
+	CallNumber      sql.NullString
 }
 
 func (*cmd) Sql() string {
@@ -50,7 +51,7 @@ func TestNewDbImpl(t *testing.T) {
 
 func init() {
 	d, err := NewDbImpl(DbConfig{
-		Addr:        "localhost:32770",
+		Addr:        "192.168.96.204:3306",
 		DB:          "robot",
 		Username:    "root",
 		Password:    "123456",
