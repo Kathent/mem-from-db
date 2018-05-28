@@ -14,6 +14,7 @@ import (
 const (
 	// userName:password@tcp(addr)/db?timeout=30s&readTimeout=30s
 	dataSourceFmt = "%s:%s@tcp(%s)/%s?timeout=%ds&readTimeout=%ds"
+	nameTag = "name"
 )
 
 var (
@@ -24,6 +25,10 @@ var (
 	stringNullType = reflect.TypeOf(sql.NullString{})
 	boolNullType   = reflect.TypeOf(sql.NullBool{})
 )
+
+func typeErr(val string) error {
+	return errors.New(val)
+}
 
 type DbConfig struct {
 	Addr        string
@@ -135,7 +140,14 @@ func resolveEle(rows *sql.Rows, val reflect.Value) error {
 	elem := val.Elem()
 	dt := make([]interface{}, 0)
 	for _, col := range cols {
-		afterName := transferName(col)
+		structField, ok := elem.Type().FieldByName(col)
+		if !ok {
+			return typeErr(fmt.Sprintf("cannot found column:%s", col))
+		}
+		afterName := structField.Tag.Get(nameTag)
+		if afterName == "" {
+			afterName = transferName(col)
+		}
 		field := elem.FieldByName(afterName).Addr().Interface()
 		dt = append(dt, field)
 	}
@@ -144,23 +156,24 @@ func resolveEle(rows *sql.Rows, val reflect.Value) error {
 	return scan
 }
 
-func nullTypeMap(field reflect.Type) reflect.Type {
-	switch field.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return intNullType
-	case reflect.Float32, reflect.Float64:
-		return floatNullType
-	case reflect.Bool:
-		return boolNullType
-	case reflect.String:
-		return stringNullType
-	default:
-		return field
-
-	}
-	return field
-}
+//
+//func nullTypeMap(field reflect.Type) reflect.Type {
+//	switch field.Kind() {
+//	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+//		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+//		return intNullType
+//	case reflect.Float32, reflect.Float64:
+//		return floatNullType
+//	case reflect.Bool:
+//		return boolNullType
+//	case reflect.String:
+//		return stringNullType
+//	default:
+//		return field
+//
+//	}
+//	return field
+//}
 
 func transferName(colName string) string {
 	var needCap = true

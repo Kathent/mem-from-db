@@ -22,6 +22,8 @@ func NewManager(conf TableConfig, impl *mysql.DbImpl) *Manager {
 		m:      cmap.New(),
 		conf:   conf,
 		dbImpl: impl,
+
+		ir: make([]*indexReserve, 0),
 	}
 
 	manager.init()
@@ -48,5 +50,10 @@ func (m *Manager) init() {
 	err = m.dbImpl.Query(indexCmd, &ic)
 	if err != nil {
 		panic(err)
+	}
+
+	for _, v := range ic {
+		m.ir = append(m.ir, NewIndexReserveBuilder().withRes(m.conf.InitArr).withColumnInfo(ca).
+			withIndexInfo(v).build())
 	}
 }

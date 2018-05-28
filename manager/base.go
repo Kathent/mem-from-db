@@ -10,6 +10,7 @@ type Manager struct {
 	conf TableConfig
 
 	dbImpl *mysql.DbImpl
+	ir []*indexReserve
 }
 
 type TableConfig struct {
@@ -25,3 +26,5 @@ type columnInfo struct {
 
 type indexInfo struct {
 }
+
+type IndexTree interface {}
