@@ -38,15 +38,18 @@ func (ln *leafNode) full() bool {
 	return len(ln.kvs) >= ln.m
 }
 
-func (ln *leafNode) insert(k kv) {
+func (ln *leafNode) insert(k kv) int {
 	index, _ := ln.search(k.key)
 	ln.kvs = append(ln.kvs, nil)
 	copy(ln.kvs[index+1:], ln.kvs[index:])
 	ln.kvs[index] = &k
 
 	if ln.p != nil {
-		ln.p.kis[0].key = ln.kvs[0].key
+		idx, _ := ln.p.search(k.key)
+		ln.p.kis[idx].key = ln.kvs[len(ln.kvs)-1].key
 	}
+
+	return index
 }
 
 func (ln *leafNode) split() {
@@ -57,6 +60,7 @@ func (ln *leafNode) split() {
 	mid := len(ln.kvs) / 2
 	nl.kvs = make(kvs, len(ln.kvs)-mid)
 	copy(nl.kvs, ln.kvs[mid:])
+	nl.p = ln.p
 
 	// resolve pre node.
 	ln.next = nl
@@ -65,15 +69,17 @@ func (ln *leafNode) split() {
 	if ln.p == nil {
 		// no parent. create parent and link child.
 		nn := newIndexNode(nil, ln.m)
-		nn.kis = append(nn.kis, &ki{key: ln.kvs[0].key, node: ln},
-			&ki{key: nl.kvs[0].key, node: nl})
+		nn.kis = append(nn.kis, &ki{key: ln.kvs[len(ln.kvs)-1].key, node: ln},
+			&ki{key: nl.kvs[len(nl.kvs)-1].key, node: nl})
 		ln.p = nn
+		nl.p = nn
 		return
 	}
 
 	// has parent.
-	index := ln.p.insert(ln.kvs[mid].key)
+	index := ln.p.insert(ln.kvs[len(ln.kvs)-1].key)
 	ln.p.kis[index].node = ln
+	ln.p.kis[index + 1].node = nl
 }
 
 func (ln *leafNode) isNil() bool {
@@ -154,20 +160,25 @@ func (in *indexNode) insert(c comparator) int {
 func (in *indexNode) split() {
 	// create new index node.
 	nl := newIndexNode(in.p, in.m)
-	mid := len(nl.kis) / 2
+	mid := len(in.kis) / 2
 	nl.kis = make(kis, len(in.kis)-mid)
-	copy(nl.kis, nl.kis[mid+1:])
+	copy(nl.kis, in.kis[mid:])
+
+	in.kis = in.kis[:mid]
 
 	if in.p == nil {
 		// no parent. create parent and link child.
 		nn := newIndexNode(nil, in.m)
-		nn.kis = append(nn.kis, &ki{key: in.kis[0].key, node: in},
-			&ki{key: nl.kis[0].key, node: nl})
+		nn.kis = append(nn.kis, &ki{key: in.kis[len(in.kis)-1].key, node: in},
+			&ki{key: nl.kis[len(nl.kis)-1].key, node: nl})
+		in.p = nn
+		nl.p = nn
 		return
 	}
 
 	// has parent.
-	index := in.p.insert(in.kis[mid].key)
+	nl.p = in.p
+	index := in.p.insert(in.kis[mid - 1].key)
 	in.p.kis[index].node = nl
 }
 

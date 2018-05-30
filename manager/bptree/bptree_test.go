@@ -26,7 +26,7 @@ func TestNewKvs(t *testing.T) {
 }
 
 func TestBpTree_Insert(t *testing.T) {
-	intNs := []int{81, 87, 45, 78, 98, 76, 100, 102, 101}
+	intNs := []int{81, 87, 45, 78, 98, 76, 100, 102, 101, 105,106,107}
 	for i := 0; i < len(intNs); i++ {
 		intN := intNs[i]
 		fmt.Println(fmt.Sprintf("input %d", intN))
