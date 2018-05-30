@@ -1,12 +1,15 @@
 package bptree
 
-import "sort"
+import (
+	"fmt"
+	"sort"
+)
 
 type leafNode struct {
 	kvs
-	pre *leafNode
+	pre  *leafNode
 	next *leafNode
-	p *indexNode
+	p    *indexNode
 
 	m int
 }
@@ -15,7 +18,12 @@ func (ln *leafNode) search(key comparator) (int, bool) {
 	search := sort.Search(len(ln.kvs), func(i int) bool {
 		return key.compare(ln.kvs[i].key) < 0
 	})
-	return search, true
+
+	if search >= len(ln.kvs) {
+		return search, false
+	}
+
+	return search, ln.kvs[search].key == key
 }
 
 func (ln *leafNode) parent() *indexNode {
@@ -30,11 +38,55 @@ func (ln *leafNode) full() bool {
 	return len(ln.kvs) >= ln.m
 }
 
+func (ln *leafNode) insert(k kv) {
+	index, _ := ln.search(k.key)
+	ln.kvs = append(ln.kvs, nil)
+	copy(ln.kvs[index+1:], ln.kvs[index:])
+	ln.kvs[index] = &k
+
+	if ln.p != nil {
+		ln.p.kis[0].key = ln.kvs[0].key
+	}
+}
+
+func (ln *leafNode) split() {
+	// create new leaf node.
+	nl := newLeafNode(ln.p, ln.m)
+	nl.pre = ln
+	nl.next = ln.next
+	mid := len(ln.kvs) / 2
+	nl.kvs = make(kvs, len(ln.kvs)-mid)
+	copy(nl.kvs, ln.kvs[mid:])
+
+	// resolve pre node.
+	ln.next = nl
+	ln.kvs = ln.kvs[:mid]
+
+	if ln.p == nil {
+		// no parent. create parent and link child.
+		nn := newIndexNode(nil, ln.m)
+		nn.kis = append(nn.kis, &ki{key: ln.kvs[0].key, node: ln},
+			&ki{key: nl.kvs[0].key, node: nl})
+		ln.p = nn
+		return
+	}
+
+	// has parent.
+	index := ln.p.insert(ln.kvs[mid].key)
+	ln.p.kis[index].node = ln
+}
+
+func (ln *leafNode) isNil() bool {
+	return ln == nil
+}
+
 type node interface {
 	search(key comparator) (int, bool)
 	parent() *indexNode
 	setParent(p *indexNode)
 	full() bool
+	split()
+	isNil() bool
 }
 
 type comparator interface {
@@ -46,7 +98,16 @@ type kv struct {
 	val interface{}
 }
 
-type kvs []kv
+type kvs []*kv
+
+func (k kvs) String() string {
+	val := ""
+	for _, v := range k {
+		val += fmt.Sprintf("%+v,", v)
+	}
+
+	return val
+}
 
 type indexNode struct {
 	kis
@@ -54,12 +115,20 @@ type indexNode struct {
 	m int
 }
 
+func (k kis) String() string {
+	val := ""
+	for _, v := range k {
+		val += fmt.Sprintf("%+v,", v)
+	}
+
+	return val
+}
+
 func (in *indexNode) search(c comparator) (int, bool) {
-	search := sort.Search(len(in.kis), func(i int) bool {
+	search := sort.Search(len(in.kis)-1, func(i int) bool {
 		return c.compare(in.kis[i].key) < 0
 	})
-
-	return search, in.kis[search].key == c
+	return search, true
 }
 
 func (in *indexNode) parent() *indexNode {
@@ -74,64 +143,150 @@ func (in *indexNode) full() bool {
 	return len(in.kis) >= in.m
 }
 
+func (in *indexNode) insert(c comparator) int {
+	index, _ := in.search(c)
+	in.kis = append(in.kis, nil)
+	copy(in.kis[index+1:], in.kis[index:])
+	in.kis[index] = &ki{key: c}
+	return index
+}
+
+func (in *indexNode) split() {
+	// create new index node.
+	nl := newIndexNode(in.p, in.m)
+	mid := len(nl.kis) / 2
+	nl.kis = make(kis, len(in.kis)-mid)
+	copy(nl.kis, nl.kis[mid+1:])
+
+	if in.p == nil {
+		// no parent. create parent and link child.
+		nn := newIndexNode(nil, in.m)
+		nn.kis = append(nn.kis, &ki{key: in.kis[0].key, node: in},
+			&ki{key: nl.kis[0].key, node: nl})
+		return
+	}
+
+	// has parent.
+	index := in.p.insert(in.kis[mid].key)
+	in.p.kis[index].node = nl
+}
+
+func (in *indexNode) isNil() bool {
+	return in == nil
+}
+
 type ki struct {
-	key comparator
+	key  comparator
 	node node
 }
 
-type kis []ki
+type kis []*ki
 
 type BpTree struct {
-	root *indexNode
-	leaf *leafNode
-	m int
+	root node
+	m    int
 }
 
 func newLeafNode(p *indexNode, m int) *leafNode {
 	return &leafNode{
-		kvs: make([]kv, 0),
-		p: p,
-		m: m,
+		kvs: make([]*kv, 0),
+		p:   p,
+		m:   m,
 	}
 }
 
 func newIndexNode(p *indexNode, m int) *indexNode {
 	return &indexNode{
-		kis: make([]ki, 0),
-		p: p,
-		m: m,
+		kis: make([]*ki, 0),
+		p:   p,
+		m:   m,
 	}
 }
 
 func NewBpTree(m int) *BpTree {
-	root := newIndexNode(nil, m)
 	return &BpTree{
-		root: root,
-		leaf: newLeafNode(root, m),
-		m: m,
+		root: newLeafNode(nil, m),
+		m:    m,
 	}
 }
 
+func (b *BpTree) Search(c comparator) interface{} {
+	search, _, _ := b.search(c)
+	return search
+}
 
-func (b *BpTree) Search(c comparator) interface{}{
-	var n node = b.root
+func (b *BpTree) search(c comparator) (interface{}, int, *leafNode) {
+	var n = b.root
 	for {
 		if val, ok := n.(*leafNode); ok {
 			search, ok := val.search(c)
 			if !ok {
-				return nil
+				return nil, 0, val
 			}
 
-			return val.kvs[search].val
-		}else if val, ok := n.(*indexNode); ok {
+			if search >= len(val.kvs) {
+				return nil, search, val
+			}
+
+			return val.kvs[search].val, search, val
+		} else if val, ok := n.(*indexNode); ok {
 			in, _ := val.search(c)
 			n = val.kis[in].node
 			continue
-		}else {
-			return nil
+		} else {
+			return nil, 0, nil
 		}
 
 	}
 
-	return nil
+	return nil, 0, nil
+}
+
+func (b *BpTree) Insert(k kv) {
+	search, index, leaf := b.search(k.key)
+
+	// if found
+	if search != nil {
+		leaf.kvs[index].val = k.val
+		return
+	}
+
+	// not found
+	leaf.insert(k)
+	var n node = leaf
+	for ; n != nil && !n.isNil(); n = n.parent() {
+		if !n.isNil() && n.full() {
+			n.split()
+			if !b.root.parent().isNil() {
+				b.root = b.root.parent()
+			}
+		}
+	}
+}
+
+func (b *BpTree) print() {
+	nodeArr := []node{b.root}
+	for {
+		if len(nodeArr) <= 0 {
+			return
+		}
+
+		tmp := make([]node, 0)
+		for _, v := range nodeArr {
+			if val, ok := v.(*leafNode); ok {
+				fmt.Print(fmt.Sprintf("%s", val.kvs))
+				fmt.Print("----")
+			} else if val, ok := v.(*indexNode); ok {
+				fmt.Print(fmt.Sprintf("%s", val.kis))
+				fmt.Print("----")
+				for _, v := range val.kis {
+					tmp = append(tmp, v.node)
+				}
+			}
+		}
+
+		fmt.Println()
+
+		nodeArr = tmp
+	}
 }
