@@ -34,12 +34,12 @@ func (ln *leafNode) setParent(p *indexNode) {
 	ln.p = p
 }
 
-func (ln *leafNode) full() bool {
-	return len(ln.kvs) >= ln.m
+func (ln *leafNode) full(add int) bool {
+	return len(ln.kvs) + add >= ln.m
 }
 
-func (ln *leafNode) hunger() bool {
-	return len(ln.kvs) <= ln.m/2-1
+func (ln *leafNode) hunger(minus int) bool {
+	return len(ln.kvs) - minus <= ln.m/2-1
 }
 
 func (ln *leafNode) insert(k kv) int {
@@ -90,17 +90,58 @@ func (ln *leafNode) isNil() bool {
 	return ln == nil
 }
 func (ln *leafNode) delete(i int) {
+	preKey := ln.kvs[i].key
+	if i >= len(ln.kvs) - 1 {
+		ln.kvs = ln.kvs[:len(ln.kvs) - 1]
+	}else {
+		ln.kvs[i:] = ln.kvs[i+1:]
+		ln.kvs = ln.kvs[:len(ln.kvs) - 1]
+	}
 
+	search, _ := ln.p.search(preKey)
+	if ln.p != nil {
+		ln.p.kis[search].key = ln.kvs[len(ln.kvs) - 1].key
+	}
+
+	if ln.hunger(1) {
+		if ln.pre != nil && !ln.pre.hunger(1) {
+			// lean from left sibling
+			preVal := ln.pre.kvs[len(ln.pre.kvs) - 1]
+			ln.pre.kvs = ln.pre.kvs[:len(ln.pre.kvs) - 1]
+			ln.kvs = append(ln.kvs, nil)
+			ln.kvs[1:] = ln.kvs[:len(ln.kvs) - 1]
+			ln.kvs[0] = preVal
+
+			// update left sibling key
+			ln.p.kis[search-1].key = ln.pre.kvs[len(ln.pre.kvs) - 1].key
+		}else if ln.next != nil && !ln.next.hunger(1) {
+			// lean from next sibling
+			preVal := ln.next.kvs[0]
+			ln.next.kvs = ln.pre.kvs[1:]
+			ln.kvs = append(ln.kvs, preVal)
+
+			// update right sibling key
+			ln.p.kis[search].key = preVal.key
+		}else if ln.pre != nil && !ln.pre.full(len(ln.kvs)) {
+			// merge left
+			ln.kvs = append(ln.pre.kvs, ln.kvs...)
+			ln.p.kis = ln.p.kis[search:]
+		}else if ln.next != nil && !ln.next.full(len(ln.kvs)) {
+			// merge right
+			ln.next.kvs = append(ln.kvs, ln.next.kvs...)
+			ln.p.kis = ln.p.kis[search+1:]
+		}
+	}
 }
 
 type node interface {
 	search(key comparator) (int, bool)
 	parent() *indexNode
 	setParent(p *indexNode)
-	full() bool
+	full(add int) bool
 	split()
 	isNil() bool
-	hunger() bool
+	hunger(minus int) bool
 }
 
 type comparator interface {
@@ -153,8 +194,8 @@ func (in *indexNode) setParent(p *indexNode) {
 	in.p = p
 }
 
-func (in *indexNode) full() bool {
-	return len(in.kis) >= in.m
+func (in *indexNode) full(add int) bool {
+	return len(in.kis) + add >= in.m
 }
 
 func (in *indexNode) insert(c comparator) int {
@@ -194,8 +235,35 @@ func (in *indexNode) isNil() bool {
 	return in == nil
 }
 
-func (in *indexNode) hunger() bool {
-	return true
+func (in *indexNode) hunger(minus int) bool {
+	return len(in.kis) <= in.m / 2 -1
+}
+
+func (in *indexNode) eat() {
+	if in.p == nil {
+		return
+	}
+
+	index, _ := in.p.search(in.kis[0].key)
+	var preKi, nextKi *ki
+	if index > 0 {
+		preKi = in.p.kis[index - 1]
+	}
+
+	if index < len(in.p.kis) - 1 {
+		nextKi = in.p.kis[index + 1]
+	}
+
+	if preKi != nil && !preKi.node.hunger(1) {
+		
+	}else if nextKi != nil && !nextKi.node.hunger(1) {
+
+	}else if preKi != nil && !preKi.node.full(len(in.kis)){
+
+	}else if nextKi != nil && !nextKi.node.full(len(in.kis)) {
+
+	}
+
 }
 
 type ki struct {
@@ -278,7 +346,7 @@ func (b *BpTree) Insert(k kv) {
 	leaf.insert(k)
 	var n node = leaf
 	for ; n != nil && !n.isNil(); n = n.parent() {
-		if !n.isNil() && n.full() {
+		if !n.isNil() && n.full(0) {
 			n.split()
 			if !b.root.parent().isNil() {
 				b.root = b.root.parent()
@@ -315,15 +383,17 @@ func (b *BpTree) print() {
 }
 
 func (b *BpTree) Delete(k kv) bool {
-	search, _, leaf := b.search(k.key)
+	search, index, leaf := b.search(k.key)
 	if search == nil {
 		return false
 	}
 
-	var n node
-	for n = leaf; !n.isNil(); n.parent() {
-		if n.full() {
+	leaf.delete(index)
 
+	var n = leaf.p
+	for ; !n.isNil(); n.parent() {
+		if n.hunger(0) {
+			n.eat()
 		}
 	}
 	return true
