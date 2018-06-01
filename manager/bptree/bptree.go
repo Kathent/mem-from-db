@@ -100,8 +100,11 @@ func (ln *leafNode) delete(i int) {
 		ln.kvs = ln.kvs[:len(ln.kvs)-1]
 	}
 
+	if ln.p == nil {
+		return
+	}
+
 	search, _ := ln.p.search(preKey)
-	fmt.Println(fmt.Sprintf("search p :%+v", ln.p.kis))
 	if ln.p != nil {
 		ln.p.kis[search].key = ln.kvs[len(ln.kvs)-1].key
 	}
@@ -143,9 +146,6 @@ func (ln *leafNode) delete(i int) {
 				ln.pre.next = ln.next
 			}
 			ln.next.pre = ln.pre
-
-			fmt.Println(fmt.Sprintf("next merge kvs:%+v", ln.next.kvs))
-			fmt.Println(fmt.Sprintf("next merge kis:%+v, len:%d, %t", ln.p.kis, len(ln.p.kis), ln.p == ln.next.p))
 		}
 	}
 }
@@ -260,7 +260,6 @@ func (in *indexNode) eat() {
 		return
 	}
 
-	fmt.Println(fmt.Sprintf("eat in, kis:%+v, len:%d", in.kis, len(in.kis)))
 	index, _ := in.p.search(in.kis[0].key)
 	var preIn, nextIn *ki
 	if index > 0 {
@@ -292,7 +291,7 @@ func (in *indexNode) eat() {
 		in.kis = append(preNode.kis, in.kis...)
 		copy(in.p.kis[index-1:], in.p.kis[index:])
 		in.p.kis = in.p.kis[:len(in.p.kis)-1]
-		for _, v := range preNode.kis {
+		for _, v := range in.kis {
 			v.node.setParent(in)
 		}
 	} else if nextIn != nil && !nextIn.node.full(len(in.kis)) {
@@ -300,7 +299,7 @@ func (in *indexNode) eat() {
 		nextNode.kis = append(in.kis, nextNode.kis...)
 		copy(in.p.kis[index:], in.p.kis[index+1:])
 		in.p.kis = in.p.kis[:len(in.p.kis)-1]
-		for _, v := range in.kis {
+		for _, v := range nextNode.kis {
 			v.node.setParent(nextNode)
 		}
 	}
@@ -405,10 +404,10 @@ func (b *BpTree) print() {
 		tmp := make([]node, 0)
 		for _, v := range nodeArr {
 			if val, ok := v.(*leafNode); ok {
-				fmt.Print(fmt.Sprintf("%s", val.kvs))
+				fmt.Print(fmt.Sprintf("%s, %p", val.kvs, val.p))
 				fmt.Print("____")
 			} else if val, ok := v.(*indexNode); ok {
-				fmt.Print(fmt.Sprintf("%s", val.kis))
+				fmt.Print(fmt.Sprintf("%s, %p", val.kis, val.p))
 				fmt.Print("----")
 				for _, v := range val.kis {
 					tmp = append(tmp, v.node)
@@ -431,8 +430,6 @@ func (b *BpTree) Delete(k kv) bool {
 	leaf.delete(index)
 
 	var n = leaf.p
-	fmt.Println(fmt.Sprintf("leaf p is :%+v, addr:%p", leaf.p, leaf.p))
-	defer fmt.Println(fmt.Sprintf("after delete leaf p is :%+v, addr:%p", leaf.p, leaf.p))
 	for ; !n.isNil(); n = n.parent() {
 		if b.root == n {
 			if len(n.kis) <= 1 {
