@@ -52,6 +52,8 @@ func (m *Manager) init() {
 		panic(err)
 	}
 
+	m.ir = make([]*indexReserve, 0)
+
 	for _, v := range ic {
 		reserve, err := NewIndexReserveBuilder().withRes(m.conf.InitArr).withColumnInfo(ca).
 			withIndexInfo(v).build()

@@ -18,12 +18,12 @@ func errorF(val string) error{
 }
 
 type indexReserve struct {
-	tree *IndexTree
+	tree IndexTree
 }
 
 
 type indexReserveBuilder struct {
-	res []interface{}
+	res interface{}
 	i indexInfo
 	c []columnInfo
 }
@@ -51,7 +51,7 @@ func NewIndexReserveBuilder() *indexReserveBuilder {
 	return &indexReserveBuilder{}
 }
 
-func (b *indexReserveBuilder) withRes(res []interface{}) *indexReserveBuilder {
+func (b *indexReserveBuilder) withRes(res interface{}) *indexReserveBuilder {
 	b.res = res
 	return b
 }
@@ -84,8 +84,14 @@ func (b *indexReserveBuilder) build() (*indexReserve, error) {
 		indexColumnArr[idx] = info
 	}
 
-	for _, v := range b.res {
-		val := reflect.ValueOf(v)
+	of := reflect.TypeOf(b.res)
+	if of.Kind() != reflect.Ptr && of.Elem().Kind() != reflect.Array && of.Elem().Kind() != reflect.Slice{
+		return nil, errorF(fmt.Sprintf("res type err:%v", of.Kind()))
+	}
+
+	valueOf := reflect.ValueOf(b.res)
+	for i := 0; i < valueOf.Len(); i++ {
+		val := valueOf.Index(i)
 		for _, c := range indexColumnArr {
 			kc.keys = append(kc.keys, comparator.NewComparator(c.DataType, val.FieldByName(c.ColumnName).Interface()))
 		}

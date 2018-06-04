@@ -18,7 +18,7 @@ type Manager struct {
 type TableConfig struct {
 	DbName  string
 	Name    string
-	InitArr []interface{}
+	InitArr interface{}
 }
 
 type columnInfo struct {
