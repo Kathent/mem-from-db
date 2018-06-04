@@ -3,6 +3,7 @@ package bptree
 import (
 	"fmt"
 	"sort"
+	"github.com/Kathent/mem-from-db/manager/comparator"
 )
 
 type leafNode struct {
@@ -14,16 +15,16 @@ type leafNode struct {
 	m int
 }
 
-func (ln *leafNode) search(key comparator) (int, bool) {
+func (ln *leafNode) search(key comparator.Comparator) (int, bool) {
 	search := sort.Search(len(ln.kvs), func(i int) bool {
-		return key.compare(ln.kvs[i].key) <= 0
+		return key.Compare(ln.kvs[i].Key) <= 0
 	})
 
 	if search >= len(ln.kvs) {
 		return search, false
 	}
 
-	return search, ln.kvs[search].key == key
+	return search, ln.kvs[search].Key == key
 }
 
 func (ln *leafNode) parent() *indexNode {
@@ -42,15 +43,15 @@ func (ln *leafNode) hunger(minus int) bool {
 	return len(ln.kvs)-minus <= ln.m/2-1
 }
 
-func (ln *leafNode) insert(k kv) int {
-	index, _ := ln.search(k.key)
+func (ln *leafNode) insert(k KV) int {
+	index, _ := ln.search(k.Key)
 	ln.kvs = append(ln.kvs, nil)
 	copy(ln.kvs[index+1:], ln.kvs[index:])
 	ln.kvs[index] = &k
 
 	if ln.p != nil {
-		idx, _ := ln.p.search(k.key)
-		ln.p.kis[idx].key = ln.kvs[len(ln.kvs)-1].key
+		idx, _ := ln.p.search(k.Key)
+		ln.p.kis[idx].key = ln.kvs[len(ln.kvs)-1].Key
 	}
 
 	return index
@@ -75,15 +76,15 @@ func (ln *leafNode) split() {
 	if ln.p == nil {
 		// no parent. create parent and link child.
 		nn := newIndexNode(nil, ln.m)
-		nn.kis = append(nn.kis, &ki{key: ln.kvs[len(ln.kvs)-1].key, node: ln},
-			&ki{key: nl.kvs[len(nl.kvs)-1].key, node: nl})
+		nn.kis = append(nn.kis, &ki{key: ln.kvs[len(ln.kvs)-1].Key, node: ln},
+			&ki{key: nl.kvs[len(nl.kvs)-1].Key, node: nl})
 		ln.p = nn
 		nl.p = nn
 		return
 	}
 
 	// has parent.
-	index := ln.p.insert(ln.kvs[len(ln.kvs)-1].key)
+	index := ln.p.insert(ln.kvs[len(ln.kvs)-1].Key)
 	ln.p.kis[index].node = ln
 	ln.p.kis[index+1].node = nl
 }
@@ -92,7 +93,7 @@ func (ln *leafNode) isNil() bool {
 	return ln == nil
 }
 func (ln *leafNode) delete(i int) {
-	preKey := ln.kvs[i].key
+	preKey := ln.kvs[i].Key
 	if i >= len(ln.kvs)-1 {
 		ln.kvs = ln.kvs[:len(ln.kvs)-1]
 	} else {
@@ -106,7 +107,7 @@ func (ln *leafNode) delete(i int) {
 
 	search, _ := ln.p.search(preKey)
 	if ln.p != nil {
-		ln.p.kis[search].key = ln.kvs[len(ln.kvs)-1].key
+		ln.p.kis[search].key = ln.kvs[len(ln.kvs)-1].Key
 	}
 
 	if ln.hunger(0) {
@@ -118,16 +119,16 @@ func (ln *leafNode) delete(i int) {
 			copy(ln.kvs[1:], ln.kvs[:len(ln.kvs)-1])
 			ln.kvs[0] = preVal
 
-			// update left sibling key
-			ln.p.kis[search-1].key = ln.pre.kvs[len(ln.pre.kvs)-1].key
+			// update left sibling Key
+			ln.p.kis[search-1].key = ln.pre.kvs[len(ln.pre.kvs)-1].Key
 		} else if ln.next != nil && !ln.next.hunger(1) {
 			// lean from next sibling
 			preVal := ln.next.kvs[0]
 			ln.next.kvs = ln.next.kvs[1:]
 			ln.kvs = append(ln.kvs, preVal)
 
-			// update right sibling key
-			ln.p.kis[search].key = preVal.key
+			// update right sibling Key
+			ln.p.kis[search].key = preVal.Key
 		} else if ln.pre != nil && !ln.pre.full(len(ln.kvs)) {
 			// merge left
 			ln.kvs = append(ln.pre.kvs, ln.kvs...)
@@ -151,7 +152,7 @@ func (ln *leafNode) delete(i int) {
 }
 
 type node interface {
-	search(key comparator) (int, bool)
+	search(key comparator.Comparator) (int, bool)
 	parent() *indexNode
 	setParent(p *indexNode)
 	full(add int) bool
@@ -160,16 +161,12 @@ type node interface {
 	hunger(minus int) bool
 }
 
-type comparator interface {
-	compare(c comparator) int
+type KV struct {
+	Key comparator.Comparator
+	Val interface{}
 }
 
-type kv struct {
-	key comparator
-	val interface{}
-}
-
-type kvs []*kv
+type kvs []*KV
 
 func (k kvs) String() string {
 	val := ""
@@ -195,9 +192,9 @@ func (k kis) String() string {
 	return val
 }
 
-func (in *indexNode) search(c comparator) (int, bool) {
+func (in *indexNode) search(c comparator.Comparator) (int, bool) {
 	search := sort.Search(len(in.kis)-1, func(i int) bool {
-		return c.compare(in.kis[i].key) <= 0
+		return c.Compare(in.kis[i].key) <= 0
 	})
 	return search, true
 }
@@ -214,7 +211,7 @@ func (in *indexNode) full(add int) bool {
 	return len(in.kis)+add >= in.m
 }
 
-func (in *indexNode) insert(c comparator) int {
+func (in *indexNode) insert(c comparator.Comparator) int {
 	index, _ := in.search(c)
 	in.kis = append(in.kis, nil)
 	copy(in.kis[index+1:], in.kis[index:])
@@ -306,7 +303,7 @@ func (in *indexNode) eat() {
 }
 
 type ki struct {
-	key  comparator
+	key  comparator.Comparator
 	node node
 }
 
@@ -319,7 +316,7 @@ type BpTree struct {
 
 func newLeafNode(p *indexNode, m int) *leafNode {
 	return &leafNode{
-		kvs: make([]*kv, 0),
+		kvs: make([]*KV, 0),
 		p:   p,
 		m:   m,
 	}
@@ -340,12 +337,12 @@ func NewBpTree(m int) *BpTree {
 	}
 }
 
-func (b *BpTree) Search(c comparator) interface{} {
+func (b *BpTree) Search(c comparator.Comparator) interface{} {
 	search, _, _ := b.search(c)
 	return search
 }
 
-func (b *BpTree) search(c comparator) (interface{}, int, *leafNode) {
+func (b *BpTree) search(c comparator.Comparator) (interface{}, int, *leafNode) {
 	var n = b.root
 	for {
 		if val, ok := n.(*leafNode); ok {
@@ -358,7 +355,7 @@ func (b *BpTree) search(c comparator) (interface{}, int, *leafNode) {
 				return nil, search, val
 			}
 
-			return val.kvs[search].val, search, val
+			return val.kvs[search].Val, search, val
 		} else if val, ok := n.(*indexNode); ok {
 			in, _ := val.search(c)
 			n = val.kis[in].node
@@ -372,12 +369,12 @@ func (b *BpTree) search(c comparator) (interface{}, int, *leafNode) {
 	return nil, 0, nil
 }
 
-func (b *BpTree) Insert(k kv) {
-	search, index, leaf := b.search(k.key)
+func (b *BpTree) Insert(k KV) {
+	search, index, leaf := b.search(k.Key)
 
 	// if found
 	if search != nil {
-		leaf.kvs[index].val = k.val
+		leaf.kvs[index].Val = k.Val
 		return
 	}
 
@@ -421,8 +418,8 @@ func (b *BpTree) print() {
 	}
 }
 
-func (b *BpTree) Delete(k kv) bool {
-	search, index, leaf := b.search(k.key)
+func (b *BpTree) Delete(key comparator.Comparator) bool {
+	search, index, leaf := b.search(key)
 	if search == nil {
 		return false
 	}

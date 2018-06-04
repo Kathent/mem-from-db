@@ -53,7 +53,11 @@ func (m *Manager) init() {
 	}
 
 	for _, v := range ic {
-		m.ir = append(m.ir, NewIndexReserveBuilder().withRes(m.conf.InitArr).withColumnInfo(ca).
-			withIndexInfo(v).build())
+		reserve, err := NewIndexReserveBuilder().withRes(m.conf.InitArr).withColumnInfo(ca).
+			withIndexInfo(v).build()
+		if err != nil {
+			panic(err)
+		}
+		m.ir = append(m.ir, reserve)
 	}
 }
