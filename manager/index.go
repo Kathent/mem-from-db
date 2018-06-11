@@ -17,8 +17,8 @@ func errorF(val string) error{
 	return errors.New(val)
 }
 
-type indexReserve struct {
-	tree IndexTree
+type IndexReserve struct {
+	Tree IndexTree
 }
 
 
@@ -66,10 +66,10 @@ func (b *indexReserveBuilder) withColumnInfo(c []columnInfo) *indexReserveBuilde
 	return b
 }
 
-func (b *indexReserveBuilder) build() (*indexReserve, error) {
+func (b *indexReserveBuilder) build() (*IndexReserve, error) {
 	bpt := bptree.NewBpTree(treeM)
-	ir := &indexReserve{
-		tree: bpt,
+	ir := &IndexReserve{
+		Tree: bpt,
 	}
 
 	columns := strings.Split(b.i.Columns, ",")

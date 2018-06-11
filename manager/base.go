@@ -12,7 +12,7 @@ type Manager struct {
 	conf TableConfig
 
 	dbImpl *mysql.DbImpl
-	ir []*indexReserve
+	ir []*IndexReserve
 }
 
 type TableConfig struct {

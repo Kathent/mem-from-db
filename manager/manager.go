@@ -23,7 +23,7 @@ func NewManager(conf TableConfig, impl *mysql.DbImpl) *Manager {
 		conf:   conf,
 		dbImpl: impl,
 
-		ir: make([]*indexReserve, 0),
+		ir: make([]*IndexReserve, 0),
 	}
 
 	manager.init()
@@ -52,7 +52,7 @@ func (m *Manager) init() {
 		panic(err)
 	}
 
-	m.ir = make([]*indexReserve, 0)
+	m.ir = make([]*IndexReserve, 0)
 
 	for _, v := range ic {
 		reserve, err := NewIndexReserveBuilder().withRes(m.conf.InitArr).withColumnInfo(ca).
