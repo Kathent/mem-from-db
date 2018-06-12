@@ -2,9 +2,9 @@ package manager
 
 import (
 	"github.com/Kathent/mem-from-db/db/mysql"
-	"github.com/orcaman/concurrent-map"
 	"github.com/Kathent/mem-from-db/manager/bptree"
 	"github.com/Kathent/mem-from-db/manager/comparator"
+	"github.com/orcaman/concurrent-map"
 )
 
 type Manager struct {
@@ -12,7 +12,7 @@ type Manager struct {
 	conf TableConfig
 
 	dbImpl *mysql.DbImpl
-	ir []*IndexReserve
+	ir     map[string]*IndexReserve
 }
 
 type TableConfig struct {
@@ -28,6 +28,7 @@ type columnInfo struct {
 }
 
 type indexInfo struct {
+	Name    string
 	Columns string
 }
 
