@@ -11,18 +11,18 @@ import (
 )
 
 var typeTemplates, _ = template.New("managerTmp").Parse(`
-package {% packageName %}
+package {{ .packageName }}
 
 import "mem-from-db/manager"
 
-type {% managerName%} struct {
+type {{ .managerName }} struct {
 	manager *manager.Manager
 }
 `)
 
 var funcTemplates, _ = template.New("funcTmp").Parse(`
-func (m *{% managerName%}) {% functionName%} ({% indexElem %}) {% domainType %} {
-return m.ir[{ % indexName% }].Tree.Search()
+func (m *{{ .managerName}}) {{ .functionName}} ({{ .indexElem }}) {{ .domainType }} {
+return m.ir[{{ .indexName }}].Tree.Search()
 }
 `)
 
@@ -38,6 +38,7 @@ type domain struct {
 
 type field struct {
 	name string
+	typ string
 }
 
 type index struct {
@@ -65,7 +66,16 @@ func (m *managerGenerator) generate() error {
 	}
 	writer := bufio.NewWriter(file)
 
-	typeTemplates.Execute(writer, nil)
+	err = typeTemplates.Execute(writer, map[string]interface{}{
+		"packageName": m.pkg,
+		"managerName": m.domain.managerName,
+	})
+
+	if err != nil {
+		return err
+	}
+
+
 	return nil
 }
 
@@ -80,26 +90,43 @@ func main() {
 	}
 
 	for _, val := range f.Scope.Objects {
-		createManager(val)
+		domain := createDomain(val)
+		if domain != nil {
+			continue
+		}
+
+		generateErr := (&managerGenerator{
+			dstPath: "",
+			pkg:     "",
+			domain:  domain,
+		}).generate()
+
+		if generateErr != nil {
+			panic(generateErr)
+		}
 	}
 }
 
-func createManager(object *ast.Object) {
+func createDomain(object *ast.Object) *domain {
 	if object.Kind != ast.Typ {
-		return
+		return nil
 	}
 
 	//name := object.Name
 	spec, ok := object.Decl.(*ast.TypeSpec)
 	if !ok {
-		return
+		return nil
 	}
 
 	stt, ok := spec.Type.(*ast.StructType)
 	if !ok {
-		return
+		return nil
 	}
 
+	d := domain{}
 	for _, v := range stt.Fields.List {
+		f := field{name: v.Names[0].Name, typ: v.Type.(*ast.Ident).Name}
+		d.fields = append(d.fields, f)
 	}
+	return nil
 }
