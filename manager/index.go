@@ -1,19 +1,19 @@
 package manager
 
 import (
-	"strings"
 	"errors"
 	"fmt"
+	"github.com/Kathent/mem-from-db/manager/bptree"
 	"github.com/Kathent/mem-from-db/manager/comparator"
 	"reflect"
-	"github.com/Kathent/mem-from-db/manager/bptree"
+	"strings"
 )
 
-const(
+const (
 	treeM = 100
 )
 
-func errorF(val string) error{
+func errorF(val string) error {
 	return errors.New(val)
 }
 
@@ -21,30 +21,10 @@ type IndexReserve struct {
 	Tree IndexTree
 }
 
-
 type indexReserveBuilder struct {
 	res interface{}
-	i indexInfo
-	c []columnInfo
-}
-
-type keyValueComparator struct {
-	keys []comparator.Comparator
-}
-
-func (kvc *keyValueComparator) Compare(c comparator.Comparator) int {
-	if val, ok := c.(*keyValueComparator); ok {
-		for idx, v := range kvc.keys {
-			compareVal := v.Compare(val.keys[idx])
-			if compareVal != 0 {
-				return compareVal
-			}
-		}
-
-		return 0
-	}
-
-	return 1
+	i   indexInfo
+	c   []columnInfo
 }
 
 func NewIndexReserveBuilder() *indexReserveBuilder {
@@ -73,7 +53,7 @@ func (b *indexReserveBuilder) build() (*IndexReserve, error) {
 	}
 
 	columns := strings.Split(b.i.Columns, ",")
-	kc := keyValueComparator{}
+	kc := comparator.KeyValueComparator{}
 
 	indexColumnArr := make([]*columnInfo, 0)
 	for idx, v := range columns {
@@ -85,7 +65,7 @@ func (b *indexReserveBuilder) build() (*IndexReserve, error) {
 	}
 
 	of := reflect.TypeOf(b.res)
-	if of.Kind() != reflect.Ptr && of.Elem().Kind() != reflect.Array && of.Elem().Kind() != reflect.Slice{
+	if of.Kind() != reflect.Ptr && of.Elem().Kind() != reflect.Array && of.Elem().Kind() != reflect.Slice {
 		return nil, errorF(fmt.Sprintf("res type err:%v", of.Kind()))
 	}
 
@@ -93,7 +73,7 @@ func (b *indexReserveBuilder) build() (*IndexReserve, error) {
 	for i := 0; i < valueOf.Len(); i++ {
 		val := valueOf.Index(i)
 		for _, c := range indexColumnArr {
-			kc.keys = append(kc.keys, comparator.NewComparator(c.DataType, val.FieldByName(c.ColumnName).Interface()))
+			kc.Keys = append(kc.Keys, comparator.NewComparator(c.DataType, val.FieldByName(c.ColumnName).Interface()))
 		}
 
 		bpt.Insert(bptree.KV{Key: &kc, Val: val.Interface()})
@@ -112,7 +92,7 @@ func arrayMap(arr []columnInfo, f func(info columnInfo) bool) *columnInfo {
 	return nil
 }
 
-func findInColumnInfo(s string, arr []columnInfo) *columnInfo{
+func findInColumnInfo(s string, arr []columnInfo) *columnInfo {
 	return arrayMap(arr, func(info columnInfo) bool {
 		if info.ColumnName == s {
 			return true
