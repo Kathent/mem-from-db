@@ -7,7 +7,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"html/template"
+	"text/template"
 	"os"
 	"strconv"
 	"strings"
@@ -17,32 +17,13 @@ const (
 	managerNameFmt = "%sManager"
 )
 
-var typeTemplates, _ = template.New("managerTmp").Parse(`
-package {{ .packageName }}
-
-import "mem-from-db/manager"
-
-type {{ .managerName }} struct {
-	manager *manager.Manager
-}
-
-{{ range $k, $v := range .index}}
-func (m *{{ $.managerName}}) SearchBy{{ range $v.fields }} {{ .name }} {{ end }} ({{ range $v.fields }} {{ .name }} {{ .typ }} , {{end}}) {{ .domainType }} {
-	kc := comparator.KeyValueComparator{
-		Keys: make([]comparator.Comparator, 0)
-	}
-	{{ range .fields}}
-		kc.Keys = append(kc.Keys, comparator.NewComparator({{ .typ }}, {{ .name }}))
-	{{ end }}
-	return m.manager.ir[{{ $k }}].Tree.Search(kc)
-}
-{{ end }}
-`)
+var typeTemplates *template.Template
 
 type domain struct {
 	managerName string
 	fields      []field
-	index       map[string]index
+	index       map[string]*index
+	name        string
 }
 
 type field struct {
@@ -52,7 +33,7 @@ type field struct {
 
 type index struct {
 	name   string
-	fields []field
+	Fields []field
 }
 
 type managerGenerator struct {
@@ -79,7 +60,10 @@ func (m *managerGenerator) generate() error {
 		"packageName": m.pkg,
 		"managerName": m.domain.managerName,
 		"index":       m.domain.index,
+		"domainType":  m.domain.name,
 	})
+
+	writer.Flush()
 
 	if err != nil {
 		return err
@@ -105,7 +89,7 @@ func main() {
 
 		generateErr := (&managerGenerator{
 			dstPath: strings.Replace(*filePath, ".", "_manager.", 1),
-			pkg:     "",
+			pkg:     f.Name.Name,
 			domain:  domain,
 		}).generate()
 
@@ -131,7 +115,8 @@ func createDomain(object *ast.Object) *domain {
 		return nil
 	}
 
-	d := domain{}
+	d := domain{index: make(map[string]*index)}
+	d.name = object.Name
 	d.managerName = fmt.Sprintf(managerNameFmt, object.Name)
 	for _, v := range stt.Fields.List {
 		f := field{name: v.Names[0].Name, typ: v.Type.(*ast.Ident).Name}
@@ -140,31 +125,30 @@ func createDomain(object *ast.Object) *domain {
 		tagMap := parseTag(v.Tag)
 		if val, exist := tagMap["index"]; exist {
 			for _, v := range val {
-				split := strings.Split(v, ",")
+				split := strings.Split(strings.Replace(v, "\"", "", -1), ",")
 				if len(split) >= 2 {
 					fieldIndex, err := strconv.Atoi(split[1])
+					if err != nil {
+						continue
+					}
 					if pre, exist := d.index[split[0]]; exist {
-						if len(pre.fields) <= fieldIndex {
+						if len(pre.Fields) <= fieldIndex {
 							fields := make([]field, fieldIndex+1)
-							copy(fields, pre.fields)
+							copy(fields, pre.Fields)
 							fields[fieldIndex] = f
-							pre.fields = fields
+							pre.Fields = fields
 						} else {
-							pre.fields[fieldIndex] = f
+							pre.Fields[fieldIndex] = f
 						}
 					} else {
-						if err != nil {
-							continue
-						}
-
 						fields := make([]field, fieldIndex+1)
 						fields[fieldIndex] = f
-						d.index[split[0]] = index{name: split[0], fields: fields}
+						d.index[split[0]] = &index{name: split[0], Fields: fields}
 					}
 				}
 			}
 		} else if val, exist := tagMap["id"]; exist {
-			d.index[val[0]] = index{name: val[0], fields: []field{f}}
+			d.index[val[0]] = &index{name: val[0], Fields: []field{f}}
 		}
 	}
 	return &d
@@ -176,18 +160,89 @@ func parseTag(lit *ast.BasicLit) map[string][]string {
 		return nil
 	}
 
+	val := strings.Replace(lit.Value, "`", "", -1)
 	res := make(map[string][]string)
-	splits := strings.Fields(lit.Value)
+	splits := strings.Fields(val)
 	for _, val := range splits {
 		split := strings.Split(val, ":")
 		if len(split) == 2 {
 			if tmp, ok := res[split[0]]; ok {
-				tmp = append(tmp, strings.Split(split[1], ",")...)
+				tmp = append(tmp, split[1])
 			} else {
-				res[split[0]] = strings.Split(split[1], ",")
+				res[split[0]] = []string{split[1]}
 			}
 		}
 	}
 
 	return res
+}
+
+func getFuncName(field []field) string {
+	str := "SearchBy"
+	for _, v := range field {
+		str = str + v.name
+	}
+
+	return str
+}
+
+func getParameter(field []field) string {
+	str := ""
+	size := len(field)
+	for k, v := range field {
+		str += strings.ToLower(v.name) + " " + v.typ
+		if k < size-1 {
+			str += ","
+		}
+	}
+
+	return str
+}
+
+func getKey(fields []field) string {
+	str := ""
+	for _, v := range fields {
+		str += fmt.Sprintf("\t kc.Keys = append(kc.Keys, comparator.NewComparator(\"%s\", %s)) \n\r", v.typ,
+			strings.ToLower(v.name))
+	}
+
+	return str
+}
+
+func init() {
+	m := map[string]interface{}{
+		"getFuncName":  getFuncName,
+		"getParameter": getParameter,
+		"getKey":       getKey,
+	}
+
+	tpl, err := template.New("managerTmp").Funcs(m).Parse(`
+package {{ .packageName }}
+
+import "github.com/Kathent/mem-from-db/manager"
+import "github.com/Kathent/mem-from-db/manager"
+
+type {{ .managerName }} struct {
+	manager *manager.Manager
+}
+
+{{ range $k, $v := .index}}
+func (m *{{ $.managerName}}) {{ getFuncName $v.Fields}} ( {{ getParameter $v.Fields}}) ({{ $.domainType }}, bool) {
+	kc := &comparator.KeyValueComparator{
+		Keys: make([]comparator.Comparator, 0),
+	}
+
+{{ getKey $v.Fields }}
+
+	sample, ok  := m.manager.IR["{{ $k }}"].Tree.Search(kc).({{ $.domainType }})
+	return sample, ok
+}
+{{ end }}
+`)
+
+	if err != nil {
+		panic(err)
+	}
+
+	typeTemplates = tpl
 }
