@@ -152,7 +152,8 @@ func createDomain(object *ast.Object) *domain {
 				}
 			}
 		} else if val, exist := tagMap["id"]; exist {
-			d.index[val[0]] = &index{name: val[0], Fields: []field{f}}
+			replace := strings.Replace(val[0], "\"", "", -1)
+			d.index[replace] = &index{name: replace, Fields: []field{f}}
 		} else if val, exist := tagMap["db"]; exist {
 			replace := strings.Replace(val[0], "\"", "", -1)
 			split := strings.Split(replace, ",")
