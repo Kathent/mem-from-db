@@ -7,10 +7,10 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"text/template"
 	"os"
 	"strconv"
 	"strings"
+	"text/template"
 )
 
 const (
@@ -24,6 +24,8 @@ type domain struct {
 	fields      []field
 	index       map[string]*index
 	name        string
+	tableName   string
+	db          string
 }
 
 type field struct {
@@ -61,6 +63,8 @@ func (m *managerGenerator) generate() error {
 		"managerName": m.domain.managerName,
 		"index":       m.domain.index,
 		"domainType":  m.domain.name,
+		"dbName":      m.domain.db,
+		"tableName":   m.domain.tableName,
 	})
 
 	writer.Flush()
@@ -72,7 +76,7 @@ func (m *managerGenerator) generate() error {
 }
 
 func main() {
-	filePath := flag.String("path", "cmd/sample.go", "domain file path")
+	filePath := flag.String("path", "domain/sample.go", "domain file path")
 	flag.Parse()
 
 	fSet := token.NewFileSet()
@@ -149,6 +153,13 @@ func createDomain(object *ast.Object) *domain {
 			}
 		} else if val, exist := tagMap["id"]; exist {
 			d.index[val[0]] = &index{name: val[0], Fields: []field{f}}
+		} else if val, exist := tagMap["db"]; exist {
+			replace := strings.Replace(val[0], "\"", "", -1)
+			split := strings.Split(replace, ",")
+			if len(split) >= 2 {
+				d.db = split[0]
+				d.tableName = split[1]
+			}
 		}
 	}
 	return &d
@@ -219,21 +230,35 @@ func init() {
 	tpl, err := template.New("managerTmp").Funcs(m).Parse(`
 package {{ .packageName }}
 
-import "github.com/Kathent/mem-from-db/manager"
-import "github.com/Kathent/mem-from-db/manager"
+import (
+	"github.com/Kathent/mem-from-db/manager/comparator"
+	"github.com/Kathent/mem-from-db/db/mysql"
+	"github.com/Kathent/mem-from-db/manager"
+)
 
 type {{ .managerName }} struct {
 	manager *manager.Manager
 }
 
+func New{{ .managerName }}(m *mysql.DbImpl) *{{ .managerName }} {
+	mm := manager.NewManager(manager.TableConfig{
+		DbName: "{{ .dbName }}",
+		Name: "{{ .tableName }}",
+		InitArr: make([]{{ .domainType }}, 0),
+	}, m)
+
+	return &{{ .managerName }}{
+		manager: mm,
+	}
+}
+
 {{ range $k, $v := .index}}
-func (m *{{ $.managerName}}) {{ getFuncName $v.Fields}} ( {{ getParameter $v.Fields}}) ({{ $.domainType }}, bool) {
+func (m *{{ $.managerName}}) {{ getFuncName $v.Fields}} ({{ getParameter $v.Fields}}) ({{ $.domainType }}, bool) {
 	kc := &comparator.KeyValueComparator{
 		Keys: make([]comparator.Comparator, 0),
 	}
 
 {{ getKey $v.Fields }}
-
 	sample, ok  := m.manager.IR["{{ $k }}"].Tree.Search(kc).({{ $.domainType }})
 	return sample, ok
 }
